@@ -1,17 +1,55 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import './index.css';
-import App from './App';
-import reportWebVitals from './reportWebVitals';
+import express from "express";
+import cors from "cors";
+import { StreamChat } from "stream-chat";
+import { v4 as uuidv4 } from "uuid";
+import bcrypt from "bcrypt";
+const app = express();
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+app.use(cors());
+app.use(express.json());
+const api_key = "d2t9gvjxnhup";
+const api_secret =
+  "kvteekqs4qhnnqr98uuhq2k58bfg6jss3s99hgakjwvysqatdpnwp8y9geqydvqz";
+const serverClient = StreamChat.getInstance(api_key, api_secret);
 
-// If you want to start measuring performance in your app, pass a function
-// to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
-reportWebVitals();
+app.post("/signup", async (req, res) => {
+  try {
+    const { firstName, lastName, username, password } = req.body;
+    const userId = uuidv4();
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const token = serverClient.createToken(userId);
+    res.json({ token, userId, firstName, lastName, username, hashedPassword });
+  } catch (error) {
+    res.json(error);
+  }
+});
+
+app.post("/login", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const { users } = await serverClient.queryUsers({ name: username });
+    if (users.length === 0) return res.json({ message: "User not found" });
+
+    const token = serverClient.createToken(users[0].id);
+    const passwordMatch = await bcrypt.compare(
+      password,
+      users[0].hashedPassword
+    );
+
+    if (passwordMatch) {
+      res.json({
+        token,
+        firstName: users[0].firstName,
+        lastName: users[0].lastName,
+        username,
+        userId: users[0].id,
+      });
+    }
+  } catch (error) {
+    res.json(error);
+  }
+});
+
+app.listen(3001, () => {
+  console.log("Server is running on port 3001");
+});
